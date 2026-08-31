@@ -226,11 +226,11 @@ namespace utils
 #ifdef __linux__
     LLFIO_EXCEPTION_TRY
     {
-      auto fill_buffer = [](std::vector<char> &buffer, const char *path) -> result<void>
+      auto fill_buffer = [](std::vector<char> &buffer, const native_handle_type& base, const char *path) -> result<void>
       {
         for(;;)
         {
-          int ih = ::open(path, O_RDONLY);
+          int ih = ::openat(base.fd, path, O_RDONLY);
           if(ih == -1)
           {
             return posix_error();
@@ -350,6 +350,9 @@ namespace utils
       private_paged_in = ??? MISSING
 
       */
+
+      OUTCOME_TRY(const native_handle_type proc_base, get_proc_base());
+
       process_memory_usage ret;
       if(!!(want & process_memory_usage::want::this_process))
       {
@@ -359,7 +362,7 @@ namespace utils
              (want & process_memory_usage::want::private_paged_in))
           {
             std::vector<char> buffer(256);
-            OUTCOME_TRY(fill_buffer(buffer, "/proc/self/statm"));
+            OUTCOME_TRY(fill_buffer(buffer, proc_base, "thread-self/statm"));
             if(buffer.size() > 1)
             {
               size_t file_and_shared_pages_paged_in = 0;
@@ -374,7 +377,7 @@ namespace utils
           if(want & process_memory_usage::want::private_committed)
           {
             std::vector<char> smaps_rollup(256), maps(65536);
-            auto r = fill_buffer(smaps_rollup, "/proc/self/smaps_rollup");
+            auto r = fill_buffer(smaps_rollup, proc_base, "thread-self/smaps_rollup");
             if(!r)
             {
               if(r.error() == errc::no_such_file_or_directory)
@@ -384,7 +387,7 @@ namespace utils
               }
               return std::move(r).error();
             }
-            OUTCOME_TRY(fill_buffer(maps, "/proc/self/maps"));
+            OUTCOME_TRY(fill_buffer(maps, proc_base, "thread-self/maps"));
             uint64_t lazyfree = 0;
             {
               string_view i(smaps_rollup.data(), smaps_rollup.size());
@@ -419,7 +422,7 @@ namespace utils
         else
         {
           std::vector<char> buffer(1024 * 1024);
-          OUTCOME_TRY(fill_buffer(buffer, "/proc/self/smaps"));
+          OUTCOME_TRY(fill_buffer(buffer, proc_base, "thread-self/smaps"));
           const string_view totalview(buffer.data(), buffer.size());
           // std::cerr << totalview << std::endl;
           std::vector<string_view> anon_entries, non_anon_entries;
@@ -509,7 +512,7 @@ namespace utils
       if(!!(want & process_memory_usage::want::this_system))
       {
         std::vector<char> buffer(1024);
-        OUTCOME_TRY(fill_buffer(buffer, "/proc/meminfo"));
+        OUTCOME_TRY(fill_buffer(buffer, proc_base, "thread-self/meminfo"));
         if(buffer.size() > 1)
         {
           string_view i(buffer.data(), buffer.size());
@@ -665,11 +668,11 @@ namespace utils
       cpu <user> <user-nice> <kernel> <idle>
       */
       std::vector<char> buffer1(65536), buffer2(65536);
-      auto fill_buffer = [](std::vector<char> &buffer, const char *path) -> result<void>
+      auto fill_buffer = [](std::vector<char> &buffer, const native_handle_type& base, const char *path) -> result<void>
       {
         for(;;)
         {
-          int ih = ::open(path, O_RDONLY);
+          int ih = ::openat(base.fd, path, O_RDONLY);
           if(ih == -1)
           {
             return posix_error();
@@ -699,9 +702,12 @@ namespace utils
         }
         return success();
       };
+
+      OUTCOME_TRY(const native_handle_type proc_base, get_proc_base());
+
       static const uint64_t ts_multiplier = 1000000000ULL / sysconf(_SC_CLK_TCK);
-      OUTCOME_TRY(fill_buffer(buffer1, "/proc/self/stat"));
-      OUTCOME_TRY(fill_buffer(buffer2, "/proc/stat"));
+      OUTCOME_TRY(fill_buffer(buffer1, proc_base, "thread-self/stat"));
+      OUTCOME_TRY(fill_buffer(buffer2, proc_base, "stat"));
       if(sscanf(buffer1.data(), "%*d %*s %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %" SCNu64 " %" SCNu64, &ret.process_ns_in_user_mode,
                 &ret.process_ns_in_kernel_mode) < 2)
       {

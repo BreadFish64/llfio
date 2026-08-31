@@ -43,7 +43,20 @@ Distributed under the Boost Software License, Version 1.0.
 LLFIO_V2_NAMESPACE_EXPORT_BEGIN
 
 class fs_handle;
+class handle;
 class io_context;
+
+/*! Get an unmanaged path handle pointing to the base of a procfs mount point.
+If not already set, attempts to open a new handle to "/proc".
+The handle has static storage duration.
+*/
+result<native_handle_type> get_proc_base() noexcept;
+
+/*! Set a global path handle pointing to the base of a procfs mount point.
+Has no effect if the handle is already set.
+Returns the new value of get_global_proc_base().
+*/
+result<native_handle_type> set_proc_base(handle &&handle) noexcept;
 
 #pragma pack(push, 4)
 
