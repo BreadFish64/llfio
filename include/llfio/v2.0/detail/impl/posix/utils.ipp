@@ -103,10 +103,10 @@ namespace utils
       {
         char buffer[4096], *hugepagesize, *hugepages;
         ssize_t buffer_len{::read(ih, buffer, sizeof(buffer) - 1)};
+        ::close(ih);
         if (buffer_len >= 0)
         {
           buffer[buffer_len] = 0;
-          ::close(ih);
           hugepagesize = strstr(buffer, "Hugepagesize:");
           hugepages = strstr(buffer, "HugePages_Total:");
           if((hugepagesize != nullptr) && (hugepages != nullptr))
