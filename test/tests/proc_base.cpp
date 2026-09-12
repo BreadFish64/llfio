@@ -398,6 +398,26 @@ namespace
     BOOST_CHECK(statfs.f_fstypename == "tmpfs");
   }
 
+  void TestProcBaseTempInode()
+  {
+    if(!try_setup())
+    {
+      std::cerr << "WARNING: Failed to unshare user namespace, assuming unprivileged_userns_clone is disabled on this "
+                   "system, skipping test"
+                << std::endl;
+      return;
+    }
+    isolated_mount_namespace mount_namespace;
+    auto mount_namespace_guard = mount_namespace.join().value();
+
+    auto inner_root = llfio::path("/").value();
+
+    auto temp_file = llfio::temp_inode(inner_root);
+    BOOST_REQUIRE(temp_file);
+    auto link_result = temp_file.value().link(inner_root, "file.txt");
+    BOOST_CHECK(link_result);
+  }
+
 }  // namespace
 
 KERNELTEST_TEST_KERNEL(integration, llfio, proc_base, set_proc_base, "Tests that set_proc_base() works",
@@ -444,5 +464,10 @@ TestProcBaseProcessCurrentPath())
 KERNELTEST_TEST_KERNEL(integration, llfio, proc_base, statfs,
                        "Tests that statfs_t::fill works without /proc mounted in the current mount namespace",
                        TestProcBaseStatfs())
+
+KERNELTEST_TEST_KERNEL(
+integration, llfio, proc_base, temp_inode,
+"Tests that linking a temp_inode file works without /proc mounted in the current mount namespace",
+TestProcBaseTempInode())
 
 #endif
